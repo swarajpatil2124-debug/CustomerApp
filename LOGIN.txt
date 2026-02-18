@@ -1,0 +1,238 @@
+USE [Inventory]
+GO
+
+/****** Object:  Table [dbo].[UserTransaction]    Script Date: 18/02/2026 10:57:48 AM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[UserTransaction](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[TransactionId] [uniqueidentifier] NOT NULL,
+	[CompanyId] [int] NULL,
+	[BranchId] [int] NULL,
+	[UserName] [nvarchar](100) NOT NULL,
+	[Name] [nvarchar](150) NULL,
+	[LoginId] [nvarchar](150) NULL,
+	[PasswordId] [int] NULL,
+	[Email] [nvarchar](100) NULL,
+	[MobileNo] [nvarchar](15) NULL,
+	[UserLevelId] [int] NOT NULL,
+	[RoleId] [int] NULL,
+	[IsUserActive] [bit] NOT NULL,
+	[IsExternalUser] [bit] NOT NULL,
+	[IsFirstLogin] [bit] NOT NULL,
+	[FailedLoginCount] [int] NOT NULL,
+	[IsLocked] [bit] NOT NULL,
+	[PasswordExpiryDate] [datetime] NULL,
+	[JobDescriptionId] [int] NULL,
+	[Creator] [nvarchar](50) NULL,
+	[CreatedDate] [datetime] NOT NULL,
+	[Approver] [nvarchar](50) NULL,
+	[ApprovedDate] [datetime] NULL,
+	[ApprovalStatus] [nvarchar](20) NULL,
+	[ReasonForDisapproval] [nvarchar](255) NULL,
+	[LastChanged] [datetime] NOT NULL,
+ CONSTRAINT [PK_UserTransaction] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_UserTransaction_LoginId] UNIQUE NONCLUSTERED 
+(
+	[LoginId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[UserTransaction] ADD  CONSTRAINT [DF__UserTrans__Trans__5165187F]  DEFAULT (newid()) FOR [TransactionId]
+GO
+
+ALTER TABLE [dbo].[UserTransaction] ADD  CONSTRAINT [DF__UserTrans__IsUse__52593CB8]  DEFAULT ((1)) FOR [IsUserActive]
+GO
+
+ALTER TABLE [dbo].[UserTransaction] ADD  CONSTRAINT [DF__UserTrans__IsExt__534D60F1]  DEFAULT ((0)) FOR [IsExternalUser]
+GO
+
+ALTER TABLE [dbo].[UserTransaction] ADD  CONSTRAINT [DF__UserTrans__IsFir__5441852A]  DEFAULT ((1)) FOR [IsFirstLogin]
+GO
+
+ALTER TABLE [dbo].[UserTransaction] ADD  CONSTRAINT [DF__UserTrans__Faile__5535A963]  DEFAULT ((0)) FOR [FailedLoginCount]
+GO
+
+ALTER TABLE [dbo].[UserTransaction] ADD  CONSTRAINT [DF__UserTrans__IsLoc__5629CD9C]  DEFAULT ((0)) FOR [IsLocked]
+GO
+
+ALTER TABLE [dbo].[UserTransaction] ADD  CONSTRAINT [DF__UserTrans__Creat__571DF1D5]  DEFAULT (getdate()) FOR [CreatedDate]
+GO
+
+ALTER TABLE [dbo].[UserTransaction] ADD  CONSTRAINT [DF__UserTrans__LastC__5812160E]  DEFAULT (getdate()) FOR [LastChanged]
+GO
+
+
+
+
+
+USE [Inventory]
+GO
+
+/****** Object:  Table [dbo].[UserPassword]    Script Date: 18/02/2026 11:13:25 AM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[UserPassword](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[LoginId] [nvarchar](150) NULL,
+	[CompanyId] [int] NOT NULL,
+	[Password] [nvarchar](50) NOT NULL,
+	[EffectiveDate] [datetime] NOT NULL,
+	[ExpireDays] [int] NOT NULL,
+	[IsActive] [bit] NOT NULL,
+ CONSTRAINT [PK_UserPassword] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[UserPassword] ADD  CONSTRAINT [DF__UserPassw__Effec__5AEE82B9]  DEFAULT (getdate()) FOR [EffectiveDate]
+GO
+
+ALTER TABLE [dbo].[UserPassword] ADD  CONSTRAINT [DF__UserPassw__Expir__5BE2A6F2]  DEFAULT ((90)) FOR [ExpireDays]
+GO
+
+ALTER TABLE [dbo].[UserPassword] ADD  CONSTRAINT [DF__UserPassw__IsAct__5CD6CB2B]  DEFAULT ((1)) FOR [IsActive]
+GO
+
+
+
+
+
+
+USE [Inventory]
+GO
+
+/****** Object:  StoredProcedure [dbo].[sp_Login]    Script Date: 18/02/2026 10:53:06 AM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+Create PROCEDURE [dbo].[sp_Login]
+(
+    @LoginId NVARCHAR(50)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    /* ================= PASSWORD (LATEST ACTIVE) ================= */
+    DECLARE 
+        @Password NVARCHAR(500),
+        @PwdIsActive BIT;
+
+    SELECT TOP 1
+        @Password = UP.Password,
+        @PwdIsActive = UP.IsActive
+    FROM UserPassword UP
+    WHERE UP.LoginId = @LoginId
+    ORDER BY UP.EffectiveDate DESC;
+
+    IF @Password IS NULL
+    BEGIN
+        SELECT 'INVALID_LOGIN' AS Status;
+        RETURN;
+    END
+
+    IF @PwdIsActive = 0
+    BEGIN
+        SELECT 'PASSWORD_INACTIVE' AS Status;
+        RETURN;
+    END
+
+    /* ================= USER DETAILS ================= */
+    SELECT TOP 1
+        'SUCCESS'          AS Status,
+        UT.Id              AS UserId,
+        UT.LoginId,
+        UT.UserName,
+        UT.Name,
+        UT.RoleId,
+        UT.UserLevelId,
+        UT.IsUserActive,
+        UT.IsLocked,
+        UT.FailedLoginCount,
+        @Password          AS PasswordHash,
+        GETDATE()          AS LoginTime
+    FROM UserTransaction UT
+    WHERE UT.LoginId = @LoginId;
+END
+GO
+
+
+
+
+using Dapper;
+using InventoryProject.Models;
+using Microsoft.AspNetCore.Mvc;
+using System.Data;
+
+[ApiController]
+[Route("api/auth")]
+public class AuthController : ControllerBase
+{
+    private readonly DbHelper _db;
+
+    public AuthController(DbHelper db)
+    {
+        _db = db;
+    }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(LoginRequest request)
+    {
+        using var con = _db.GetConnection();
+
+        var result = await con.QueryFirstOrDefaultAsync<LoginDbResult>(
+            "sp_Login",
+            new { LoginId = request.LoginId },
+            commandType: CommandType.StoredProcedure
+        );
+
+        if (result == null)
+            return Unauthorized(new { success = false, message = "Invalid login" });
+
+        if (!PasswordHelper.Verify(request.Password, result.PasswordHash))
+            return Unauthorized(new { success = false, message = "Invalid password" });
+
+        if (!result.IsUserActive)
+            return Unauthorized(new { success = false, message = "User inactive" });
+
+        if (result.IsLocked)
+            return Unauthorized(new { success = false, message = "User locked" });
+
+        return Ok(new LoginResponse
+        {
+            Success = true,
+            Message = "Login Successful",
+
+            UserId = result.UserId,
+            LoginId = result.LoginId,
+            UserName = result.UserName,
+            Name = result.Name,
+
+            RoleId = result.RoleId,          
+            UserLevelId = result.UserLevelId,
+            LoginTime = DateTime.Now
+        });
+    }
+
+}
+
+
